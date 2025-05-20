@@ -1,0 +1,52 @@
+[
+  {
+    "id": "promo1",
+    "title": "AirAsia 10% Off to BKK",
+    "description": "Exclusive 10% discount on all flights to Bangkok. Book now for travel until December 2025.",
+    "code": "BKKDEAL10",
+    "expiryDate": "Jun 30, 2025",
+    "airline": "AirAsia",
+    "discount": "10% OFF",
+    "bgColor": "bg-red-600"
+  },
+  {
+    "id": "promo2",
+    "title": "Singapore Airlines Weekend Special",
+    "description": "Enjoy 15% off on all weekend flights. Valid for bookings made 14 days in advance.",
+    "code": "SQWEEKEND15",
+    "expiryDate": "Jul 15, 2025",
+    "airline": "Singapore Airlines",
+    "discount": "15% OFF",
+    "bgColor": "bg-blue-600"
+  },
+  {
+    "id": "promo3",
+    "title": "Emirates Business Class Upgrade",
+    "description": "Economy to Business Class upgrade for just $299 on select long-haul routes.",
+    "code": "EKUPGRADE",
+    "expiryDate": "Aug 31, 2025",
+    "airline": "Emirates",
+    "discount": "UPGRADE",
+    "bgColor": "bg-amber-700"
+  },
+  {
+    "id": "promo4",
+    "title": "Jetstar Flash Sale",
+    "description": "24-hour flash sale with up to 30% off on domestic routes. Limited seats available.",
+    "code": "FLASH30",
+    "expiryDate": "May 25, 2025",
+    "airline": "Jetstar",
+    "discount": "30% OFF",
+    "bgColor": "bg-orange-500"
+  },
+  {
+    "id": "promo5",
+    "title": "Qatar Airways Companion Offer",
+    "description": "Buy one, get 50% off on the second ticket when traveling with a companion.",
+    "code": "QRCOMPANION",
+    "expiryDate": "Sep 15, 2025",
+    "airline": "Qatar Airways",
+    "discount": "50% OFF",
+    "bgColor": "bg-purple-700"
+  }
+]
