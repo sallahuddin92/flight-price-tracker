@@ -6,10 +6,8 @@ const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/static/js/main.chunk.js',
-  '/static/js/0.chunk.js',
-  '/static/js/bundle.js',
-  '/static/css/main.chunk.css',
+  '/assets/index.css',
+  '/assets/index.js',
 ];
 
 // Install a service worker

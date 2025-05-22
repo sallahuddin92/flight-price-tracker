@@ -1,239 +1,285 @@
 import React, { useState, useEffect } from 'react';
-import FlightCard from '../components/FlightCard';
-import PromoSection from '../components/PromoSection';
-import { Search, Calendar, MapPin } from 'lucide-react';
-import flightData from '../data/flights.json';
-import { useAlerts } from '../context/AlertContext';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useServices } from '../providers/ServiceProvider';
+import type { FlightOffer, SearchParams } from '../services/types';
+import { countries, getAirportsByCountry, type Airport } from '../data/airports';
+import PriceCalendar from '../components/PriceCalendar';
+import { DateRange } from 'react-day-picker';
 
-interface Flight {
-  id: string;
-  airline: string;
-  origin: string;
-  destination: string;
-  departureTime: string;
-  arrivalTime: string;
-  price: number;
-  currency: string;
-  duration: string;
-  flightNumber: string;
-  aircraft: string;
-  availableSeats: number;
-}
-
-// Get unique origins and destinations for dropdown options
-const getUniqueLocations = () => {
-  const origins = new Set(flightData.map((flight: Flight) => flight.origin));
-  const destinations = new Set(flightData.map((flight: Flight) => flight.destination));
-  
-  return {
-    origins: Array.from(origins),
-    destinations: Array.from(destinations)
-  };
-};
-
-const SearchFlightsPage: React.FC = () => {
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const [filteredFlights, setFilteredFlights] = useState<Flight[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+const Home: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { flightService } = useServices();
+  const [flights, setFlights] = useState<FlightOffer[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string>('');
-  
-  // Search form state
-  const [origin, setOrigin] = useState<string>('');
-  const [destination, setDestination] = useState<string>('');
-  const [date, setDate] = useState<string>('');
-  
-  const { origins, destinations } = getUniqueLocations();
+  const [selectedOriginCountry, setSelectedOriginCountry] = useState<string>('');
+  const [selectedDestinationCountry, setSelectedDestinationCountry] = useState<string>('');
+  const [originAirports, setOriginAirports] = useState<Airport[]>([]);
+  const [destinationAirports, setDestinationAirports] = useState<Airport[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [priceData, setPriceData] = useState<Array<{ date: Date; price: number; currency: string }>>([]);
 
-  // Load flight data
+  const [searchParams, setSearchParams] = useState<SearchParams>({
+    origin: '',
+    destination: '',
+    departureDate: '',
+    returnDate: '',
+    cabinClass: 'ECONOMY',
+    currency: 'USD',
+    adults: 1,
+    children: 0,
+    infants: 0,
+  });
+
   useEffect(() => {
-    try {
-      setFlights(flightData);
-      setFilteredFlights(flightData);
-      setLoading(false);
-    } catch (err) {
-      setError('Failed to load flight data');
-      setLoading(false);
+    if (user?.preferences) {
+      setSearchParams(prev => ({
+        ...prev,
+        currency: user.preferences.currency,
+        cabinClass: user.preferences.cabinClass,
+      }));
     }
-  }, []);
+  }, [user]);
 
-  // Handle search form submission
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    // Filter flights based on search criteria
-    const filtered = flights.filter((flight) => {
-      const matchOrigin = origin ? flight.origin === origin : true;
-      const matchDestination = destination ? flight.destination === destination : true;
-      
-      // If date is provided, check if flight departure date matches
-      const matchDate = date ? new Date(flight.departureTime).toISOString().split('T')[0] === date : true;
-      
-      return matchOrigin && matchDestination && matchDate;
-    });
-    
-    setFilteredFlights(filtered);
-    setLoading(false);
-    
-    // Show toast notification
-    if (filtered.length === 0) {
-      showToastNotification('No flights found matching your criteria');
+  useEffect(() => {
+    if (selectedOriginCountry) {
+      setOriginAirports(getAirportsByCountry(selectedOriginCountry));
     } else {
-      showToastNotification(`Found ${filtered.length} flights`);
+      setOriginAirports([]);
+    }
+  }, [selectedOriginCountry]);
+
+  useEffect(() => {
+    if (selectedDestinationCountry) {
+      setDestinationAirports(getAirportsByCountry(selectedDestinationCountry));
+    } else {
+      setDestinationAirports([]);
+    }
+  }, [selectedDestinationCountry]);
+
+  useEffect(() => {
+    if (dateRange?.from) {
+      // Simulate fetching price data for the selected month
+      const prices = Array.from({ length: 30 }, (_, i) => ({
+        date: new Date(dateRange.from!.getFullYear(), dateRange.from!.getMonth(), i + 1),
+        price: Math.floor(Math.random() * 500) + 200,
+        currency: searchParams.currency,
+      }));
+      setPriceData(prices);
+    }
+  }, [dateRange, searchParams.currency]);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      const results = await flightService.searchFlights(searchParams);
+      setFlights(results);
+    } catch (err) {
+      setError('Failed to search flights');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // No longer needed as PriceAlertBox handles this directly
-  // Keeping the toast notification function for other notifications
-
-  // Toast notification helper
-  const showToastNotification = (message: string) => {
-    setToastMessage(message);
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setSearchParams(prev => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-2xl md:text-3xl font-bold text-center mb-8 text-gray-800 dark:text-white">
-        Flight Ticket Price Tracker
-      </h1>
-      
-      {/* Search Form */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-8">
-        <form onSubmit={handleSearch} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Find Your Flight</h1>
+
+        <form onSubmit={handleSearch} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="origin" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Origin
+              <label htmlFor="originCountry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Origin Country
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MapPin className="h-5 w-5 text-gray-400" />
-                </div>
-                <select
-                  id="origin"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                >
-                  <option value="">Select Origin</option>
-                  {origins.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                id="originCountry"
+                value={selectedOriginCountry}
+                onChange={(e) => setSelectedOriginCountry(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="">Select a country</option>
+                {countries.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
             </div>
-            
+
             <div>
-              <label htmlFor="destination" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Destination
+              <label htmlFor="origin" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Origin Airport
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MapPin className="h-5 w-5 text-gray-400" />
-                </div>
-                <select
-                  id="destination"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                >
-                  <option value="">Select Destination</option>
-                  {destinations.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                id="origin"
+                name="origin"
+                value={searchParams.origin}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              >
+                <option value="">Select an airport</option>
+                {originAirports.map((airport) => (
+                  <option key={airport.code} value={airport.code}>
+                    {airport.name} ({airport.code})
+                  </option>
+                ))}
+              </select>
             </div>
-            
+
             <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Departure Date
+              <label htmlFor="destinationCountry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Destination Country
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Calendar className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="date"
-                  id="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <select
+                id="destinationCountry"
+                value={selectedDestinationCountry}
+                onChange={(e) => setSelectedDestinationCountry(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="">Select a country</option>
+                {countries.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="destination" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Destination Airport
+              </label>
+              <select
+                id="destination"
+                name="destination"
+                value={searchParams.destination}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              >
+                <option value="">Select an airport</option>
+                {destinationAirports.map((airport) => (
+                  <option key={airport.code} value={airport.code}>
+                    {airport.name} ({airport.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Dates
+              </label>
+              <PriceCalendar
+                prices={priceData}
+                selectedRange={dateRange}
+                onSelect={setDateRange}
+                currency={searchParams.currency}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="cabinClass" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Cabin Class
+              </label>
+              <select
+                id="cabinClass"
+                name="cabinClass"
+                value={searchParams.cabinClass}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="ECONOMY">Economy</option>
+                <option value="PREMIUM_ECONOMY">Premium Economy</option>
+                <option value="BUSINESS">Business</option>
+                <option value="FIRST">First</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="currency" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Currency
+              </label>
+              <select
+                id="currency"
+                name="currency"
+                value={searchParams.currency}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+              </select>
             </div>
           </div>
-          
-          <div className="flex justify-center">
+
+          <div className="mt-6">
             <button
               type="submit"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
-              <Search className="h-5 w-5 mr-2" />
-              Search Flights
+              {loading ? 'Searching...' : 'Search Flights'}
             </button>
           </div>
         </form>
-      </div>
-      
-      {/* Flight Results */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-          {filteredFlights.length > 0 ? 'Available Flights' : 'No Flights Found'}
-        </h2>
-        
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-8" role="alert">
+            <span className="block sm:inline">{error}</span>
           </div>
-        ) : error ? (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <strong className="font-bold">Error!</strong>
-            <span className="block sm:inline"> {error}</span>
-          </div>
-        ) : (
+        )}
+
+        {flights.length > 0 && (
           <div className="space-y-4">
-            {filteredFlights.map((flight) => (
-              <FlightCard
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Available Flights</h2>
+            {flights.map(flight => (
+              <div
                 key={flight.id}
-                id={flight.id}
-                airline={flight.airline}
-                origin={flight.origin}
-                destination={flight.destination}
-                departureTime={flight.departureTime}
-                arrivalTime={flight.arrivalTime}
-                price={flight.price}
-                currency={flight.currency}
-                duration={flight.duration}
-                flightNumber={flight.flightNumber}
-                onSetAlert={handleSetAlert}
-              />
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer"
+                onClick={() => navigate(`/flight/${flight.id}`)}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {flight.airline} {flight.flightNumber}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {flight.origin} → {flight.destination}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(flight.departureTime).toLocaleString()} - {flight.duration}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {flight.currency} {flight.price}
+                    </p>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
-      
-      {/* Promo Section */}
-      <PromoSection />
-      
-      {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg animate-fade-in-out">
-          {toastMessage}
-        </div>
-      )}
     </div>
   );
 };
 
-export default SearchFlightsPage;
+export default Home;
+
